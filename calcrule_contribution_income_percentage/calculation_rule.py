@@ -1,6 +1,6 @@
 import json
 
-from .apps import AbsStrategy
+from core.abs_calculation_rule  import AbsStrategy
 from .config import CLASS_RULE_PARAM_VALIDATION, \
     DESCRIPTION_CONTRIBUTION_VALUATION, FROM_TO
 from contribution_plan.models import ContributionPlanBundleDetails
@@ -8,12 +8,12 @@ from core.signals import Signal
 from core import datetime
 from django.contrib.contenttypes.models import ContentType
 from policyholder.models import PolicyHolderInsuree
+from uuid import UUID
 
-
-class ContributionValuationRuleNoDependant(AbsStrategy):
+class ContributionValuationRule(AbsStrategy):
     version = 1
-    uuid = "0e556dd4-04a0-4aa4-ac47-2a99cfa5e9a8"
-    calculation_rule_name = "CV: percent of income, no dependants"
+    uuid = "0e1b6dd4-04a0-4ee6-ac47-2a99cfa5e9a8"
+    calculation_rule_name = "CV: percent of income"
     description = DESCRIPTION_CONTRIBUTION_VALUATION
     impacted_class_parameter = CLASS_RULE_PARAM_VALIDATION
     date_valid_from = datetime.datetime(2000, 1, 1)
@@ -29,7 +29,7 @@ class ContributionValuationRuleNoDependant(AbsStrategy):
     def active_for_object(cls, instance, context, type='account_receivable', sub_type='contribution'):
         return (
             instance.__class__.__name__ == "ContractContributionPlanDetails"
-            and  context in ["value", "members", "validity"]
+            and context in ["value", "members", "validity"]
         ) and cls.check_calculation(instance)
 
     @classmethod
@@ -42,12 +42,12 @@ class ContributionValuationRuleNoDependant(AbsStrategy):
             "ContractContributionPlanDetails", "ContributionPlanBundle"
         ]
         if class_name == "ABCMeta":
-            match = str(cls.uuid) == str(instance.uuid)
+            match = UUID(str(cls.uuid)) == UUID(str(instance.uuid))
         elif class_name == "ContributionPlan":
-            match = str(cls.uuid) == str(instance.calculation)
+            match = UUID(str(cls.uuid)) == UUID(str(instance.calculation))
         elif class_name == "ContributionPlanBundle":
-            list_cpbd = list(ContributionPlanBundleDetails.objects.filter(
-                contribution_plan_bundle=instance
+            list_cpbd = list(instance.contributionplanbundledetails_set.filter(
+                is_deleted=False
             ))
             for cpbd in list_cpbd:
                 if match is False:
@@ -66,8 +66,7 @@ class ContributionValuationRuleNoDependant(AbsStrategy):
     def calculate(cls, instance, **kwargs):
         context = kwargs.get('context', None)
         if instance.__class__.__name__ == "ContractContributionPlanDetails":
-            if not context or context=='value':
-            
+            if context == 'value':
                 # check type of json_ext - in case of string - json.loads
                 cp_params, cd_params = instance.contribution_plan.json_ext, instance.contract_details.json_ext
                 ph_insuree = PolicyHolderInsuree.objects.filter(
@@ -86,7 +85,7 @@ class ContributionValuationRuleNoDependant(AbsStrategy):
                     cd_params = cd_params["calculation_rule"] if "calculation_rule" in cd_params else None
                 if phi_params:
                     phi_params = phi_params["calculation_rule"] if "calculation_rule" in phi_params else None
-                if "rate" in cp_params:
+                if cp_params is not None and "rate" in cp_params:
                     rate = int(cp_params["rate"])
                     if cd_params:
                         if "income" in cd_params:
@@ -102,7 +101,18 @@ class ContributionValuationRuleNoDependant(AbsStrategy):
                     value = float(income) * (rate / 100)
                     return value
             elif context == 'members':
-                return [instance.contract_details.insuree]
+                cp_params, cd_params = instance.contribution_plan.json_ext, instance.contract_details.json_ext
+                if (
+                    instance.contract_details.insuree.family
+                    and 'calculation_rule' in cp_params
+                    and 'includeFamily' in cp_params['calculation_rule']
+                    and cp_params['calculation_rule']['includeFamily']
+                ):
+                    return list(instance.contract_details.insuree.family.members.filter(
+                        validity_to__isnull=True
+                    ))
+                else:
+                    return [instance.contract_details.insuree]
 
             elif context == 'validity':
                 validity_from = kwargs.get('validity_from', None)
@@ -114,6 +124,8 @@ class ContributionValuationRuleNoDependant(AbsStrategy):
                     contract = instance.contract_details.contract
                 if instance.__class__.__name__ == "ContractDetails":
                     contract = instance.contract
+
+                
                 if contract:
                     validity_from = validity_from or contract.date_valid_from
                     validity_to = validity_to or contract.date_valid_to
@@ -127,7 +139,6 @@ class ContributionValuationRuleNoDependant(AbsStrategy):
                         'effective_date': validity_from,
                         'expiry_date': validity_to
                     }
-            
 
     @classmethod
     def get_linked_class(cls, sender, class_name, **kwargs):
