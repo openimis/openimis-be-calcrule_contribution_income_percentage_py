@@ -15,6 +15,8 @@ CLASS_RULE_PARAM_VALIDATION = [
                     "update": "151203",
                     "replace": "151206",
                 },
+                'relevance': "True",
+                'condition': "INPUT>1",
                 'optionSet': [
                     {
                         "value": "5",
@@ -38,9 +40,23 @@ CLASS_RULE_PARAM_VALIDATION = [
                         }
                     },
                 ],
-                'relevance': "True",
-                'condition': "INPUT>1",
                 "default": "5"
+            },
+            {
+                "type": "checkbox",
+                "name": "includeFamily",
+                "label": {
+                    "en": "include family members",
+                    "fr": "Inclure les membres de la familles"
+                },
+                "rights": {
+                    "read": "151201",
+                    "write": "151202",
+                    "update": "151203",
+                    "replace": "151206",
+                },
+                "relevance": "True",
+                "default": "False"
             },
         ],
     },
@@ -55,10 +71,10 @@ CLASS_RULE_PARAM_VALIDATION = [
                     "fr": "Salaire"
                 },
                 "rights": {
-                    "read": "152101",
-                    "write": "152102",
-                    "update": "152103",
-                    "replace": "152103",
+                    "read": ["152101","154201"],
+                    "write": ["152102","154202"],
+                    "update": ["152103","154203"],
+                    "replace": ["152103","154203"],
                 },
                 "relevance": "True",
                 "condition": "INPUT>100",
@@ -77,10 +93,10 @@ CLASS_RULE_PARAM_VALIDATION = [
                     "fr": "Salaire"
                 },
                 "rights": {
-                    "read": "150201",
-                    "write": "150202",
-                    "update": "150203",
-                    "replace": "150206",
+                    "read": ["150201","154101"],
+                    "write": ["150202","154102"],
+                    "update": ["150203","154103"],
+                    "replace": ["150203","154103"],
                 },
                 "relevance": "True",
                 "condition": "INPUT>100",
@@ -91,9 +107,9 @@ CLASS_RULE_PARAM_VALIDATION = [
 ]
 
 DESCRIPTION_CONTRIBUTION_VALUATION = F"" \
-                                     F"This calcutation will add the income in the contract details " \
-                                     F"and PHinsuree and the percentage in the Contribution plan" \
-                                     F" so when a contract valuation is requested then the calculation will" \
-                                     F" determine the value based on the contract details income and CP percentage"
+    F"This calcutation will add the income in the contract details " \
+    F"and PHinsuree and the percentage in the Contribution plan" \
+    F" so when a contract valuation is requested then the calculation will" \
+    F" determine the value based on the contract details income and CP percentage"
 
 FROM_TO = []
