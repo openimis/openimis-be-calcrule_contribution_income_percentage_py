@@ -58,9 +58,27 @@ class ContributionValuationRule(AbsStrategy):
                 f.name for f in instance.__class__._meta.fields
                 if f.get_internal_type() == 'ForeignKey' and f.remote_field.model.__name__ in list_class_name
             ]
+            # the rule applies when any related object uses it: a later FK must not
+            # overwrite an earlier match, and an empty (nullable) FK matches nothing
             for rf in related_fields:
-                match = cls.check_calculation(getattr(instance, rf))
+                related = getattr(instance, rf, None)
+                if related is not None and cls.check_calculation(related):
+                    match = True
+                    break
         return match
+
+    @staticmethod
+    def _policy_holder_insuree(contract_details):
+        """
+        The insuree's enrolment with the policy holder of the contract: an insuree
+        may be enrolled with several policy holders, each with its own income, so the
+        insuree alone does not identify the row. None when there is no such enrolment.
+        """
+        return PolicyHolderInsuree.objects.filter(
+            insuree=contract_details.insuree,
+            policy_holder=contract_details.contract.policy_holder,
+            is_deleted=False,
+        ).order_by('-date_valid_from').first()
 
     @classmethod
     def calculate(cls, instance, **kwargs):
@@ -69,9 +87,8 @@ class ContributionValuationRule(AbsStrategy):
             if context == 'value':
                 # check type of json_ext - in case of string - json.loads
                 cp_params, cd_params = instance.contribution_plan.json_ext, instance.contract_details.json_ext
-                ph_insuree = PolicyHolderInsuree.objects.filter(
-                    insuree=instance.contract_details.insuree).first()
-                phi_params = ph_insuree.json_ext
+                ph_insuree = cls._policy_holder_insuree(instance.contract_details)
+                phi_params = ph_insuree.json_ext if ph_insuree else None
                 if isinstance(cp_params, str):
                     cp_params = json.loads(cp_params)
                 if isinstance(cd_params, str):
@@ -90,18 +107,21 @@ class ContributionValuationRule(AbsStrategy):
                     if cd_params:
                         if "income" in cd_params:
                             income = float(cd_params["income"])
-                        elif "income" in phi_params:
+                        elif phi_params and "income" in phi_params:
                             income = float(phi_params["income"])
                         else:
                             return False
-                    elif "income" in phi_params:
+                    elif phi_params and "income" in phi_params:
                         income = float(phi_params["income"])
                     else:
                         return False
                     value = float(income) * (rate / 100)
                     return value
             elif context == 'members':
-                cp_params, cd_params = instance.contribution_plan.json_ext, instance.contract_details.json_ext
+                cp_params = instance.contribution_plan.json_ext
+                if isinstance(cp_params, str):
+                    cp_params = json.loads(cp_params)
+                cp_params = cp_params or {}
                 if (
                     instance.contract_details.insuree.family
                     and 'calculation_rule' in cp_params
